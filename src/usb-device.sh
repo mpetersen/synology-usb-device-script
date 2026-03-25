@@ -1,6 +1,7 @@
 #!/bin/bash
 
-USB_INFO_FILE=/volume1/scripts/usb-info
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+USB_INFO_FILE="$SCRIPT_DIR/usb-info"
 
 case "$1" in
     eject)
