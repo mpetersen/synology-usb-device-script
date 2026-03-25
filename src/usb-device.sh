@@ -22,6 +22,22 @@ case "$1" in
             exit 0
         fi
 
+        # Figure out if a process may be using the device
+        for pid_dir in /proc/[0-9]*/; do
+            pid="${pid_dir//[^0-9]/}"
+            cwd=$(readlink "${pid_dir}cwd" 2>/dev/null)
+            if [[ "$cwd" == "$MOUNT_PATH"* ]]; then
+                echo "Cannot eject: process $(cat ${pid_dir}comm 2>/dev/null) (PID $pid) is using $MOUNT_PATH"
+                exit 1
+            fi
+            for fd in "${pid_dir}fd/"*; do
+                target=$(readlink "$fd" 2>/dev/null)
+                if [[ "$target" == "$MOUNT_PATH"* ]]; then
+                    echo "Cannot eject: process $(cat ${pid_dir}comm 2>/dev/null) (PID $pid) has open files on $MOUNT_PATH"
+                    exit 1
+                fi
+            done
+        done
         umount "$MOUNT_PATH"
         ;;
     mount)
