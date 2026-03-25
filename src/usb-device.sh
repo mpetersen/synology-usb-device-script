@@ -2,18 +2,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 USB_INFO_FILE="$SCRIPT_DIR/usb-info"
-
-# Step 1: detect any currently mounted USB device
 CURRENT_USB=$(df | awk '/\/volumeUSB/ {print $1, $6}')
-
-# Step 2: if a USB device is mounted, update usb-info; otherwise leave it untouched
-if [ -n "$CURRENT_USB" ]; then
-    echo "$CURRENT_USB" > "$USB_INFO_FILE"
-fi
-
-# Step 3: read stored info and process command
-USB_DEV=$(awk '{print $1}' "$USB_INFO_FILE" 2>/dev/null)
-MOUNT_PATH=$(awk '{print $2}' "$USB_INFO_FILE" 2>/dev/null)
 
 case "$1" in
     eject)
@@ -22,7 +11,10 @@ case "$1" in
             exit 0
         fi
 
-        # Figure out if a process may be using the device
+        USB_DEV=$(echo "$CURRENT_USB" | awk '{print $1}')
+        MOUNT_PATH=$(echo "$CURRENT_USB" | awk '{print $2}')
+
+        # Check for processes using the mount point
         for pid_dir in /proc/[0-9]*/; do
             pid="${pid_dir//[^0-9]/}"
             cwd=$(readlink "${pid_dir}cwd" 2>/dev/null)
@@ -38,20 +30,33 @@ case "$1" in
                 fi
             done
         done
+
+        # Derive USB device ID from udevadm path (e.g. "2-3" from ".../usb2/2-3/2-3:1.0/...")
+        UDEV_PATH=$(udevadm info --name "$USB_DEV" -q path)
+        USB_PORT=$(echo "$UDEV_PATH" | awk -F'/' '{for(i=1;i<=NF;i++) if($i ~ /^[0-9]+-[0-9]+$/) {print $i; exit}}')
+        if [ -z "$USB_PORT" ]; then
+            echo "Could not determine USB device port from udevadm."
+            exit 1
+        fi
+
         umount "$MOUNT_PATH"
+        echo "$USB_PORT" > "$USB_INFO_FILE"
+        echo "$USB_PORT" | tee /sys/bus/usb/drivers/usb/unbind > /dev/null
         ;;
     mount)
-        if [ -z "$USB_DEV" ]; then
+        USB_PORT=$(cat "$USB_INFO_FILE" 2>/dev/null)
+        if [ -z "$USB_PORT" ]; then
             echo "No USB info found. Run eject first."
             exit 1
         fi
 
         if [ -n "$CURRENT_USB" ]; then
+            MOUNT_PATH=$(echo "$CURRENT_USB" | awk '{print $2}')
             echo "USB device is already mounted at $MOUNT_PATH."
             exit 0
         fi
 
-        mount "$USB_DEV" "$MOUNT_PATH"
+        echo "$USB_PORT" | tee /sys/bus/usb/drivers/usb/bind > /dev/null
         ;;
     *)
         echo "Usage: $0 {eject|mount}"

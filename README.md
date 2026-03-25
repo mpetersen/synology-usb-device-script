@@ -11,7 +11,8 @@ backup is created on the USB device.
 
 - Use `df` to determine mounted USB devices
 - Eject the first device (this script assumes that only one device is connected)
-- Write the device name and mount point to `/volume1/scripts/usb-info` to restore the device later
+- Power the device down
+- Write the device id to `/volume1/scripts/usb-info` to mount the device later
 - Mount the device
 
 ## Usage
